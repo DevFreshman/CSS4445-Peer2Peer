@@ -13,15 +13,16 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
- * Pipeline:
- * inbound:  [LengthFieldBasedFrameDecoder] -> [ProtobufDecoder(Envelope)] -> [InboundEnvelopeHandler]
- * outbound: [ProtobufEncoder] -> [LengthFieldPrepender(4)]
+ * inbound : [LengthFieldBasedFrameDecoder] -> [ProtobufDecoder]
+ * outbound: [ProtobufEncoder] -> [LengthFieldPrepender]
  *
- * IMPORTANT:
- * - Server có nhiều connection => InboundEnvelopeHandler phải tạo mới theo từng channel
- *   (nếu không sẽ dính lỗi "not @Sharable").
+ * NOTE: outbound order matters because Netty walks pipeline from tail->head.
+ * So we must add LengthFieldPrepender BEFORE ProtobufEncoder,
+ * so outbound becomes ProtobufEncoder -> LengthFieldPrepender.
  */
 public final class P2PChannelInitializer extends ChannelInitializer<SocketChannel> {
+
+  private static final int MAX_FRAME = 10 * 1024 * 1024; // 10MB
 
   private final Supplier<InboundEnvelopeHandler> inboundHandlerFactory;
 
@@ -32,18 +33,23 @@ public final class P2PChannelInitializer extends ChannelInitializer<SocketChanne
   @Override
   protected void initChannel(SocketChannel ch) {
     ch.pipeline()
+        // inbound: split frame by 4-byte length field
         .addLast("frameDecoder",
             new LengthFieldBasedFrameDecoder(
-                10 * 1024 * 1024, // maxFrameLength 10MB (tạm)
-                0,                // lengthFieldOffset
-                4,                // lengthFieldLength
-                0,                // lengthAdjustment
-                4                 // initialBytesToStrip
+                MAX_FRAME,
+                0,   // lengthFieldOffset
+                4,   // lengthFieldLength
+                0,   // lengthAdjustment
+                4    // initialBytesToStrip
             ))
         .addLast("protobufDecoder", new ProtobufDecoder(Envelope.getDefaultInstance()))
-        .addLast("protobufEncoder", new ProtobufEncoder())
+
+        // ✅ outbound handlers MUST be added in this order:
+        // (so outbound flow becomes ProtobufEncoder -> LengthFieldPrepender)
         .addLast("frameEncoder", new LengthFieldPrepender(4))
-        // mỗi channel 1 handler instance
+        .addLast("protobufEncoder", new ProtobufEncoder())
+
+        // app handler (per-channel instance)
         .addLast("inbound", inboundHandlerFactory.get());
   }
 }

@@ -30,7 +30,10 @@ public final class ConnectionManager implements AutoCloseable {
   // key = host:port, value = ongoing connect future (dedupe)
   private final Map<String, CompletableFuture<Channel>> inflight = new ConcurrentHashMap<>();
 
+  // key = host:port, value = active channel
   private final Map<String, Channel> channels = new ConcurrentHashMap<>();
+
+  // key = host:port, value = client wrapper (owns bootstrap)
   private final Map<String, NettyClient> clients = new ConcurrentHashMap<>();
 
   public ConnectionManager(PendingRequests pending, ByteString selfId, HeartbeatService heartbeat) {
@@ -44,11 +47,13 @@ public final class ConnectionManager implements AutoCloseable {
     String key = peer.address();
 
     Channel existing = channels.get(key);
-    if (existing != null && existing.isActive()
+    if (existing != null
+        && existing.isActive()
         && Boolean.TRUE.equals(existing.attr(ChannelAttrs.HANDSHAKE_OK).get())) {
       return CompletableFuture.completedFuture(existing);
     }
 
+    // dedupe concurrent connect attempts
     return inflight.computeIfAbsent(key, k ->
         connect(peer).whenComplete((ch, err) -> inflight.remove(k))
     );
@@ -66,8 +71,12 @@ public final class ConnectionManager implements AutoCloseable {
 
     CompletableFuture<Channel> fut = new CompletableFuture<>();
 
-    InboundEnvelopeHandler handler = new InboundEnvelopeHandler(false, pending, selfId);
-    NettyClient client = new NettyClient(sharedGroup, new P2PChannelInitializer(handler));
+    // ✅ IMPORTANT: P2PChannelInitializer needs Supplier<InboundEnvelopeHandler>
+    P2PChannelInitializer initializer = new P2PChannelInitializer(
+        () -> new InboundEnvelopeHandler(false, pending, selfId)
+    );
+
+    NettyClient client = new NettyClient(sharedGroup, initializer);
     clients.put(key, client);
 
     try {
@@ -82,7 +91,7 @@ public final class ConnectionManager implements AutoCloseable {
 
       channels.put(key, ch);
 
-      // start heartbeat AFTER connect (ok)
+      // start heartbeat AFTER connect
       heartbeat.start(peer, ch);
 
       // ======== HELLO HANDSHAKE (NO RpcClient here) ========
