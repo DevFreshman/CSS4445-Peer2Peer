@@ -1,0 +1,4 @@
+com\ht\p2p\net\codec\P2PChannelInitializer.class
+com\ht\p2p\net\rpc\PendingRequests.class
+com\ht\p2p\net\handler\InboundEnvelopeHandler.class
+com\ht\p2p\net\conn\ChannelAttrs.class

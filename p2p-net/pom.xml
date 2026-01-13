@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.ht</groupId>
+    <artifactId>p2p-network-layer</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>p2p-net</artifactId>
+  <packaging>jar</packaging>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-all</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+    
+    <dependency>
+  <groupId>ch.qos.logback</groupId>
+  <artifactId>logback-classic</artifactId>
+  <version>1.5.16</version>
+  <scope>runtime</scope>
+</dependency>
+
+    <dependency>
+      <groupId>com.ht</groupId>
+      <artifactId>p2p-proto</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.ht</groupId>
+      <artifactId>p2p-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+  <groupId>org.codehaus.mojo</groupId>
+  <artifactId>exec-maven-plugin</artifactId>
+  <version>3.6.3</version>
+
+  <executions>
+    <execution>
+      <id>run-server</id>
+      <goals>
+        <goal>java</goal>
+      </goals>
+      <configuration>
+        <mainClass>com.ht.p2p.net.demo.NettyServerMain</mainClass>
+        <arguments>
+          <argument>9000</argument>
+        </arguments>
+      </configuration>
+    </execution>
+
+    <execution>
+      <id>run-client</id>
+      <goals>
+        <goal>java</goal>
+      </goals>
+      <configuration>
+        <mainClass>com.ht.p2p.net.demo.NettyClientMain</mainClass>
+        <arguments>
+          <argument>127.0.0.1</argument>
+          <argument>9000</argument>
+        </arguments>
+      </configuration>
+    </execution>
+  </executions>
+</plugin>
+
+
+    </plugins>
+    
+  </build>
+</project>

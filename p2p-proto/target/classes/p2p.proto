@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package p2p;
+
+option java_package = "com.ht.p2p.proto";
+option java_multiple_files = true;
+
+message PingReq {
+  string message = 1;
+}
+
+message PingRes {
+  bool ok = 1;
+  string message = 2;
+}
+
+message HelloReq {
+  bytes node_id = 1;
+  uint32 listen_port = 2;
+  string version = 3;
+}
+
+message HelloRes {
+  bool ok = 1;
+  bytes node_id = 2;
+  string version = 3;
+}
+
+message Envelope {
+  bytes sender_id = 1;
+  string request_id = 2;
+  int64 timestamp_ms = 3;
+
+  oneof payload {
+    PingReq  ping_req  = 10;
+    PingRes  ping_res  = 11;
+    HelloReq hello_req = 12;
+    HelloRes hello_res = 13;
+  }
+}
