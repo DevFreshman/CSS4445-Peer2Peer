@@ -1,20 +1,18 @@
-// com/ht/p2p/core/transport/Transport.java
+// File: src/main/java/com/ht/p2p/core/transport/Transport.java
 package com.ht.p2p.core.transport;
 
-import com.ht.p2p.proto.Envelope;
+import com.ht.p2p.core.NodeContext;
+import com.ht.p2p.core.router.MessageRouter;
 
-import java.util.concurrent.CompletableFuture;
+public interface Transport {
 
-public interface Transport extends AutoCloseable {
+    /**
+     * Start a TCP server bound to given port (0 = ephemeral).
+     */
+    AutoCloseable startServer(NodeContext ctx, int port, MessageRouter router);
 
-  CompletableFuture<Void> startListener(int listenPort, TransportListener listener);
-
-  CompletableFuture<Session> connect(String host, int port);
-
-  void send(Session session, Envelope envelope);
-
-  void close(Session session);
-
-  @Override
-  void close();
+    /**
+     * Connect to remote TCP server.
+     */
+    Connection connect(NodeContext ctx, String host, int port);
 }

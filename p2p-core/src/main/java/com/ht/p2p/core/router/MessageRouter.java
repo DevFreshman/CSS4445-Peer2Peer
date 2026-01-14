@@ -1,68 +1,80 @@
-// com/ht/p2p/core/router/MessageRouter.java
+// File: src/main/java/com/hoangtien/p2p/core/router/MessageRouter.java
 package com.ht.p2p.core.router;
 
-import com.ht.p2p.core.gossip.GossipService;
-import com.ht.p2p.core.handshake.HandshakeService;
-import com.ht.p2p.core.security.MessageValidator;
-import com.ht.p2p.core.transport.Session;
-import com.ht.p2p.proto.Envelope;
+import com.ht.p2p.core.NodeContext;
+import com.ht.p2p.core.observability.LogKeys;
+import com.ht.p2p.core.observability.Logger;
+import com.ht.p2p.core.protocol.CorrelationId;
+import com.ht.p2p.core.protocol.Envelope;
+import com.ht.p2p.core.protocol.ErrorEnvelope;
+import com.ht.p2p.core.protocol.Header;
+import com.ht.p2p.core.protocol.MessageType;
+import com.ht.p2p.core.router.routes.RouteContext;
+import com.ht.p2p.core.router.routes.RouteResult;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
-/**
- * Core inbound router:
- * 1) validate
- * 2) if RPC response -> rpc.complete
- * 3) else dispatch by payload type
- */
 public final class MessageRouter {
+    private final NodeContext ctx;
+    private final RouteRegistry registry;
+    private final List<Middleware> middleware;
 
-  private final RpcKernel rpc;
-  private final HandshakeService handshake;
-  private final GossipService gossip;
-  private final MessageValidator validator;
-
-  public MessageRouter(RpcKernel rpc,
-                       HandshakeService handshake,
-                       GossipService gossip,
-                       MessageValidator validator) {
-    this.rpc = Objects.requireNonNull(rpc);
-    this.handshake = Objects.requireNonNull(handshake);
-    this.gossip = Objects.requireNonNull(gossip);
-    this.validator = Objects.requireNonNull(validator);
-  }
-
-  public void onInbound(Session session, Envelope env) {
-    validator.validate(session, env);
-
-    // 1) RPC response fast-path
-    if (!env.getRequestId().isEmpty()) {
-      boolean completed = rpc.complete(env.getRequestId(), env);
-      if (completed) return;
+    public MessageRouter(NodeContext ctx, RouteRegistry registry, List<Middleware> middleware) {
+        this.ctx = Objects.requireNonNull(ctx, "ctx");
+        this.registry = Objects.requireNonNull(registry, "registry");
+        this.middleware = (middleware == null) ? List.of() : List.copyOf(middleware);
     }
 
-    // 2) Dispatch
-    if (env.hasHelloReq()) {
-      handshake.onHelloReq(session, env);
-      return;
-    }
-    if (env.hasHelloRes()) {
-      handshake.onHelloRes(session, env);
-      return;
-    }
-    if (env.hasPingReq()) {
-      handshake.requireHandshakeOk(session); // policy: only handle after handshake
-      handshake.onPingReq(session, env);
-      return;
-    }
-    if (env.hasPingRes()) {
-      // pingres without pending: ignore or log
-      return;
+    public Envelope dispatch(Envelope inbound) {
+        Objects.requireNonNull(inbound, "inbound");
+        Logger log = ctx.logger();
+
+        try {
+            EnvelopeHandler base = registry.getOrThrow(inbound.header().type());
+            EnvelopeHandler chained = applyMiddleware(base);
+
+            RouteResult result = chained.handle(new RouteContext(ctx), inbound);
+            if (result == null || result.outbound() == null) {
+                // Defensive: handler must return an outbound envelope
+                return errorEnvelope(inbound, "INTERNAL", "Handler returned null");
+            }
+            return result.outbound();
+        } catch (RouterException re) {
+            log.error("router.route_error", Map.of(
+                LogKeys.NODE_ID, ctx.nodeId(),
+                "inType", String.valueOf(inbound.header().type()),
+                "corr", inbound.header().correlationId().value(),
+                LogKeys.ERROR, re.toString()
+            ));
+            return errorEnvelope(inbound, "ROUTE_ERROR", re.getMessage() == null ? "Route error" : re.getMessage());
+        } catch (Throwable t) {
+            log.error("router.internal_error", Map.of(
+                LogKeys.NODE_ID, ctx.nodeId(),
+                "inType", String.valueOf(inbound.header().type()),
+                "corr", inbound.header().correlationId().value(),
+                LogKeys.ERROR, t.toString()
+            ));
+            return errorEnvelope(inbound, "INTERNAL", "Unhandled error");
+        }
     }
 
-    // gossip placeholder (you'll add proto later)
-    // if (env.hasGossipMsg()) { gossip.onGossip(session, env.getGossipMsg()); return; }
+    private EnvelopeHandler applyMiddleware(EnvelopeHandler terminal) {
+        EnvelopeHandler next = terminal;
+        for (int i = middleware.size() - 1; i >= 0; i--) {
+            Middleware mw = middleware.get(i);
+            EnvelopeHandler capturedNext = next;
+            next = (routeCtx, inbound) -> mw.apply(routeCtx, inbound, capturedNext);
+        }
+        return next;
+    }
 
-    // unknown: ignore/log
-  }
+    private Envelope errorEnvelope(Envelope inbound, String code, String message) {
+        CorrelationId corr = inbound.header().correlationId();
+        Instant ts = ctx.clock().instant();
+        Header h = new Header(MessageType.ERROR, corr, ts);
+        return new Envelope(h, new ErrorEnvelope(code, message));
+    }
 }
