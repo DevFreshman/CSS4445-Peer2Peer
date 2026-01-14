@@ -8,15 +8,28 @@
     <groupId>com.ht</groupId>
     <artifactId>p2p-network-layer</artifactId>
     <version>1.0.0-SNAPSHOT</version>
+    <!-- nếu parent ở root repo thì thường cần relativePath -->
+    <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>p2p-proto</artifactId>
   <packaging>jar</packaging>
 
+  <properties>
+    <!-- Java 21 nếu parent chưa set -->
+    <maven.compiler.release>21</maven.compiler.release>
+
+    <!-- Chốt version protobuf -->
+    <protobuf.version>3.25.3</protobuf.version>
+    <protobuf.plugin.version>0.6.1</protobuf.plugin.version>
+    <os.maven.plugin.version>1.7.1</os.maven.plugin.version>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
+      <version>${protobuf.version}</version>
     </dependency>
   </dependencies>
 
@@ -26,7 +39,7 @@
       <extension>
         <groupId>kr.motd.maven</groupId>
         <artifactId>os-maven-plugin</artifactId>
-        <version>1.7.1</version>
+        <version>${os.maven.plugin.version}</version>
       </extension>
     </extensions>
 
@@ -34,6 +47,7 @@
       <plugin>
         <groupId>org.xolstice.maven.plugins</groupId>
         <artifactId>protobuf-maven-plugin</artifactId>
+        <version>${protobuf.plugin.version}</version>
         <executions>
           <execution>
             <goals>
@@ -46,6 +60,9 @@
           <protocArtifact>
             com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}
           </protocArtifact>
+
+          <!-- Nếu bạn để .proto ở src/main/proto thì không cần set protoSourceRoot -->
+          <!-- <protoSourceRoot>${project.basedir}/src/main/proto</protoSourceRoot> -->
         </configuration>
       </plugin>
     </plugins>

@@ -15,7 +15,6 @@
     <module>p2p-proto</module>
     <module>p2p-core</module>
     <module>p2p-net</module>
-    <module>p2p-node</module>
     <module>p2p-bench</module>
   </modules>
 

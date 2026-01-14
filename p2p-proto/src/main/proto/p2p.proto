@@ -5,6 +5,18 @@ package p2p;
 option java_package = "com.ht.p2p.proto";
 option java_multiple_files = true;
 
+enum MessageType {
+  MSG_UNSPECIFIED = 0;
+
+  HELLO_REQ = 1;
+  HELLO_RES = 2;
+
+  PING_REQ  = 3;
+  PING_RES  = 4;
+
+  ERROR_RES = 5;
+}
+
 message PingReq {
   string message = 1;
 }
@@ -26,15 +38,23 @@ message HelloRes {
   string version = 3;
 }
 
+message ErrorRes {
+  string code = 1;     // e.g. "NO_ROUTE", "BAD_REQUEST"
+  string message = 2;  // human readable
+}
+
 message Envelope {
-  bytes sender_id = 1;
-  string request_id = 2;
-  int64 timestamp_ms = 3;
+  // Core routing/debug fields
+  MessageType type = 1;        // NEW: explicit type
+  bytes sender_id = 2;
+  string request_id = 3;
+  int64 timestamp_ms = 4;
 
   oneof payload {
     PingReq  ping_req  = 10;
     PingRes  ping_res  = 11;
     HelloReq hello_req = 12;
     HelloRes hello_res = 13;
+    ErrorRes error_res = 14;   // NEW
   }
 }
